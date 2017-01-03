@@ -109,3 +109,18 @@ post "/lists/:list_id/todos" do
     redirect "/lists/#{@list_id}"
   end
 end
+
+post "/lists/:list_id/todos/:todo_id/delete" do
+  @list_id = params[:list_id].to_i
+  @list = session[:lists][@list_id]
+  todo_id = params[:todo_id].to_i
+  result = @list[:todos].delete_at(todo_id)
+  
+  if result.nil?
+    session[:error] = "Unable to delete todo from list."
+    erb :list, layout: :layout
+  else
+    session[:success] = "The todo is deleted from list."
+    redirect "/lists/#{@list_id}"
+  end
+end
