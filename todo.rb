@@ -27,6 +27,12 @@ before do
   session[:lists] ||= []
 end
 
+helpers do
+  def check_todo(todo)
+    "complete" if todo[:completed] 
+  end
+end
+
 get "/" do
   redirect "/lists"
 end
@@ -87,11 +93,12 @@ post "/lists/:id/delete" do
 
   if !session[:lists][id].nil?
     session[:lists].delete_at(id)
-    session[:success] = "The list has been deleted."
-    redirect "/lists"    
+    session[:success] = "The list has been deleted."   
   else
     session[:error] = "Cannot find the list."
   end
+
+  redirect "/lists" 
 end
 
 post "/lists/:list_id/todos" do
@@ -102,12 +109,12 @@ post "/lists/:list_id/todos" do
 
   if error
     session[:error] = error
-    erb :list, layout: :layout
   else
     @list[:todos] << {name: todo_name, completed: false}
     session[:success] = "Todo has been added to the list."
-    redirect "/lists/#{@list_id}"
   end
+
+  redirect "/lists/#{@list_id}"
 end
 
 post "/lists/:list_id/todos/:todo_id/delete" do
@@ -118,9 +125,25 @@ post "/lists/:list_id/todos/:todo_id/delete" do
   
   if result.nil?
     session[:error] = "Unable to delete todo from list."
-    erb :list, layout: :layout
   else
     session[:success] = "The todo is deleted from list."
-    redirect "/lists/#{@list_id}"
   end
+
+  redirect "/lists/#{@list_id}"
+end
+
+post "/lists/:list_id/todos/:todo_id" do
+  @list_id = params[:list_id].to_i
+  @list = session[:lists][@list_id]
+  todo_id = params[:todo_id].to_i
+  todo = @list[:todos][todo_id]
+  is_completed = params[:completed] == "true"
+  
+  if todo.nil?
+    session[:error] = "Cannot find todo in list."
+  else
+    todo[:completed] = is_completed
+  end
+
+  redirect "/lists/#{@list_id}"
 end
