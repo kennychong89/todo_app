@@ -28,8 +28,44 @@ before do
 end
 
 helpers do
-  def check_todo(todo)
+  def todo_completed?(todo)
     "complete" if todo[:completed] 
+  end
+
+  def list_completed?(list)
+    list[:todos].size > 0 && list[:todos].all? { |todo| todo[:completed] }
+  end
+
+  def list_class(list)
+    "complete" if list_completed?(list)
+  end
+
+  def todos_completed_to_total_todos(todos)
+    todos_completed = todos.count { |todo| todo[:completed] }
+    "#{todos_completed} / #{todos.count}"
+  end
+
+  def sort_list(unsorted_lists)
+    sorted_lists = unsorted_lists.sort_by { |list| list_completed?(list) ? 1 : 0 }
+    sorted_lists.each_with_object({}) do |list, h|
+      h[unsorted_lists.index(list)] = list    
+    end  
+  end
+
+  def sort_todos(todos, &block)
+    incomplete_todos = {}
+    complete_todos = {}
+    
+    todos.each_with_index do |todo, index|
+      if todo[:completed]
+          complete_todos[todo] = index
+        else
+          incomplete_todos[todo] = index
+        end
+    end
+
+    incomplete_todos.each(&block)
+    complete_todos.each(&block)
   end
 end
 
@@ -99,6 +135,18 @@ post "/lists/:id/delete" do
   end
 
   redirect "/lists" 
+end
+
+post "/lists/:id/complete_all" do
+  @list_id = params[:id].to_i
+  @list = session[:lists][@list_id]
+  
+  @list[:todos].each do |todo|
+    todo[:completed] = true
+  end
+
+  session[:success] = "All todos have been completed."
+  redirect "/lists/#{@list_id}" 
 end
 
 post "/lists/:list_id/todos" do

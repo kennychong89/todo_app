@@ -1,9 +1,9 @@
 <ul id="lists">
-  <% @lists.each_with_index do |list, id| %>
-    <li>
+  <% sort_list(@lists).each_pair do |id, list| %>
+    <li class="<%= list_class(list) %>">
       <a href="/lists/<%= id %>">
         <h2><%= list[:name] %></h2> 
-        <p><%= list[:todos].size %></p>
+        <p><%= todos_completed_to_total_todos(list[:todos]) %></p>
       </a>
     </li>
   <% end %>
