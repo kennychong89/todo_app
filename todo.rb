@@ -1,5 +1,5 @@
 require "sinatra"
-require "sinatra/reloader"
+require "sinatra/reloader" if development?
 require "sinatra/content_for"
 require "tilt/erubis"
 
@@ -18,9 +18,19 @@ def error_for_todo_name(name)
   end
 end
 
+
+def load_list(index)
+  list = session[:lists][index] if index
+  return list if list
+
+  session[:error] = "The specified list was not found."
+  redirect "/lists"
+end
+
 configure do
   enable :sessions
   set :sessions_secret, 'secret'
+  set :erb, :escape_html => true
 end
 
 before do
@@ -84,13 +94,14 @@ end
 
 get "/lists/:id" do
   @list_id = params[:id].to_i
-  @list = session[:lists][@list_id]
+  @list = load_list(@list_id)
+
   erb :list, layout: :layout
 end
 
 get "/lists/:id/edit" do
   id = params[:id].to_i
-  @list = session[:lists][id]
+  @list = load_list(@list_id)
   erb :edit_list, layout: :layout
 end
 
@@ -112,7 +123,7 @@ post "/lists/:id" do
   list_name = params[:list_name].strip
   error = error_for_list_name(list_name)
   @list_id = params[:id].to_i
-  @list = session[:lists][@list_id]
+  @list = load_list(@list_id)
 
   if error
     session[:error] = error
@@ -139,7 +150,7 @@ end
 
 post "/lists/:id/complete_all" do
   @list_id = params[:id].to_i
-  @list = session[:lists][@list_id]
+  @list = load_list(@list_id)
   
   @list[:todos].each do |todo|
     todo[:completed] = true
@@ -153,7 +164,7 @@ post "/lists/:list_id/todos" do
   @list_id = params[:list_id].to_i
   todo_name = params[:todo].strip
   error = error_for_todo_name(todo_name)
-  @list = session[:lists][@list_id]
+  @list = load_list(@list_id)
 
   if error
     session[:error] = error
@@ -167,7 +178,7 @@ end
 
 post "/lists/:list_id/todos/:todo_id/delete" do
   @list_id = params[:list_id].to_i
-  @list = session[:lists][@list_id]
+  @list = load_list(@list_id)
   todo_id = params[:todo_id].to_i
   result = @list[:todos].delete_at(todo_id)
   
@@ -182,7 +193,7 @@ end
 
 post "/lists/:list_id/todos/:todo_id" do
   @list_id = params[:list_id].to_i
-  @list = session[:lists][@list_id]
+  @list = load_list(@list_id)
   todo_id = params[:todo_id].to_i
   todo = @list[:todos][todo_id]
   is_completed = params[:completed] == "true"
