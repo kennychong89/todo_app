@@ -18,13 +18,22 @@ def error_for_todo_name(name)
   end
 end
 
-
-def load_list(index)
-  list = session[:lists][index] if index
+def load_list(id)
+  list = session[:lists].find { |list| list[:id] == id }
   return list if list
 
   session[:error] = "The specified list was not found."
   redirect "/lists"
+end
+
+def next_todo_id(todos)
+  max = todos.map { |todo| todo[:id] }.max || 0
+  max + 1
+end
+
+def next_list_id(lists)
+  max = lists.map { |list| list[:id] }.max || 0
+  max + 1
 end
 
 configure do
@@ -55,24 +64,14 @@ helpers do
     "#{todos_completed} / #{todos.count}"
   end
 
-  def sort_list(unsorted_lists)
-    sorted_lists = unsorted_lists.sort_by { |list| list_completed?(list) ? 1 : 0 }
-    sorted_lists.each_with_object({}) do |list, h|
-      h[unsorted_lists.index(list)] = list    
-    end  
+  def sort_list(lists, &block)
+    complete_lists, incomplete_lists = lists.partition { |list| list_completed?(list) }
+    incomplete_lists.each(&block)
+    complete_lists.each(&block)    
   end
 
   def sort_todos(todos, &block)
-    incomplete_todos = {}
-    complete_todos = {}
-    
-    todos.each_with_index do |todo, index|
-      if todo[:completed]
-          complete_todos[todo] = index
-        else
-          incomplete_todos[todo] = index
-        end
-    end
+    complete_todos, incomplete_todos = todos.partition{ |todo| todo[:completed] }
 
     incomplete_todos.each(&block)
     complete_todos.each(&block)
@@ -100,7 +99,7 @@ get "/lists/:id" do
 end
 
 get "/lists/:id/edit" do
-  id = params[:id].to_i
+  @list_id = params[:id].to_i
   @list = load_list(@list_id)
   erb :edit_list, layout: :layout
 end
@@ -113,7 +112,8 @@ post "/lists" do
     session[:error] = error
     erb :new_list, layout: :layout
   else
-    session[:lists] << { name: list_name, todos: [] }
+    id = next_list_id(session[:lists])
+    session[:lists] << {id: id, name: list_name, todos: [] }
     session[:success] = "The list has been created."
     redirect "/lists"
   end
@@ -130,7 +130,7 @@ post "/lists/:id" do
     erb :edit_list, layout: :layout
   else
     @list[:name] = list_name
-    session[:success] = "The list has been updateed."
+    session[:success] = "The list has been updated."
     redirect "/lists/#{@list_id}"
   end  
 end
@@ -138,14 +138,13 @@ end
 post "/lists/:id/delete" do
   id = params[:id].to_i
 
-  if !session[:lists][id].nil?
-    session[:lists].delete_at(id)
-    session[:success] = "The list has been deleted."   
+  session[:lists].reject! { |list| list[:id] == id }
+  if env["HTTP_X_REQUESTED_WITH"] == "XMLHttpRequest"
+    "/lists"
   else
-    session[:error] = "Cannot find the list."
+    session[:success] = "The list has been deleted."   
+    redirect "/lists" 
   end
-
-  redirect "/lists" 
 end
 
 post "/lists/:id/complete_all" do
@@ -169,7 +168,8 @@ post "/lists/:list_id/todos" do
   if error
     session[:error] = error
   else
-    @list[:todos] << {name: todo_name, completed: false}
+    id = next_todo_id(@list[:todos])
+    @list[:todos] << {id: id, name: todo_name, completed: false}
     session[:success] = "Todo has been added to the list."
   end
 
@@ -180,29 +180,25 @@ post "/lists/:list_id/todos/:todo_id/delete" do
   @list_id = params[:list_id].to_i
   @list = load_list(@list_id)
   todo_id = params[:todo_id].to_i
-  result = @list[:todos].delete_at(todo_id)
+  @list[:todos].reject! { |todo| todo[:id] == todo_id }
   
-  if result.nil?
-    session[:error] = "Unable to delete todo from list."
+  if env["HTTP_X_REQUESTED_WITH"] == "XMLHttpRequest" # rack parses request info and passes to Sinatra
+    status 204  
   else
     session[:success] = "The todo is deleted from list."
+    redirect "/lists/#{@list_id}"
   end
-
-  redirect "/lists/#{@list_id}"
 end
 
 post "/lists/:list_id/todos/:todo_id" do
   @list_id = params[:list_id].to_i
   @list = load_list(@list_id)
   todo_id = params[:todo_id].to_i
-  todo = @list[:todos][todo_id]
+  todo = @list[:todos].find { |todo| todo[:id] == todo_id }
   is_completed = params[:completed] == "true"
-  
-  if todo.nil?
-    session[:error] = "Cannot find todo in list."
-  else
-    todo[:completed] = is_completed
-  end
+
+  todo[:completed] = is_completed
+  session[:success] = "The todo has been updated."
 
   redirect "/lists/#{@list_id}"
 end
